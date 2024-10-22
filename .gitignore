@@ -1,0 +1,10 @@
+# Ignore IDE/editor settings
+.idea/
+.vscode/
+
+# ignore I/O
+Inputs/
+Outputs/
+
+# this
+.gitignore
