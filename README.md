@@ -55,10 +55,8 @@ Load a previously saved model to rerun with hired and not hired ULAs:
 4. Handle Rejections and Rerun
 If some ULAs have been rejected (or if the assignment needs to be updated), you can modify the model and rerun the optimization to fill remaining spots:
 
-python
-Copy code
 # Retrieve variable values (e.g., ULA assignments)
-assignments = model.get_assignments()
+`assignments = model.get_assignments()`
 
 # Model Structure
 Variables:
