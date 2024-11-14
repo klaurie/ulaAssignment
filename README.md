@@ -61,13 +61,24 @@ If some ULAs have been rejected (or if the assignment needs to be updated), you 
 # Model Structure
 Variables:
 x[i, s]: Binary variable indicating if ULA i is assigned to studio s.
+
 alpha[i, j]: Binary variable indicating if ULA i is assigned to instructor j.
+
 w[j, g]: Continuous variable for instructor gender assignments.
+
 y[j, r]: Continuous variable for instructor race assignments.
+
 z[j, m]: Continuous variable for instructor major assignments.
+
 Constraints:
+
 Studio Constraints: Ensure each studio has the required number of ULAs.
+
 Instructor Constraints: Ensure each ULA is assigned to at most one instructor, with appropriate gender, race, and major representation.
+
 E-campus Constraints: Ensure e-campus and non-e-campus students are assigned to the correct studio types.
+
 Availability Constraints: Ensure ULA availability aligns with studio assignments.
+
 Demographic Constraints: Ensure fairness by enforcing constraints based on ULA race, major, and gender.
+
