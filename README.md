@@ -22,65 +22,45 @@ Download and install from Gurobi's website.
 You’ll need a Gurobi license (a free academic license is available).
 Install required Python libraries:
 
-bash
-Copy code
-pip install pandas numpy gurobipy
+
+`pip install pandas numpy gurobipy`
 Ensure you have all necessary data (student, studio, and instructor information) in a compatible format (e.g., CSV or Excel files).
 
 Usage
 1. Define the Optimization Model
 To start the optimization process, initialize the model class and load your data (student info, studio info, etc.):
 
-python
-Copy code
-from gurobipy import Model
+`from gurobipy import Model`
 
 # Initialize the model
-model = ULAPlacementModel(num_ulas, num_studios, student_info, studio_info, instructor_info)
+`model = ULAPlacementModel(num_ulas, num_studios, student_info, studio_info, instructor_info)`
 
 # Define variables and constraints
-model.define_hiring_variables()
-model.add_constraints()
+`model.define_hiring_variables()
+model.add_constraints()`
 2. Solve the Optimization Problem
 Once the model is set up, you can solve it using the following command:
 
-python
-Copy code
-model.m.optimize()
+`model.m.optimize()`
 This will trigger the solver to find the optimal assignment of ULAs to studios while respecting the constraints.
 
 3. Save and Load Model State
 Save the current model to a file for later re-use:
 
-python
-Copy code
-model.m.write('model_solution.sol')
-Load a previously saved model to resume or modify the solution:
+`model.m.write('model_solution.sol')`
+Load a previously saved model to rerun with hired and not hired ULAs:
 
-python
-Copy code
-model.m.read('model_solution.sol')
+`model.m.read('model.lp')`
+
 4. Handle Rejections and Rerun
 If some ULAs have been rejected (or if the assignment needs to be updated), you can modify the model and rerun the optimization to fill remaining spots:
-
-python
-Copy code
-# Update model (e.g., remove rejected ULAs, fill unfilled spots)
-model.update_model_for_rerun()
-
-# Re-run optimization
-model.m.optimize()
-5. Extract Results
-Once the model has been solved, you can retrieve the variable values to see the assignments:
 
 python
 Copy code
 # Retrieve variable values (e.g., ULA assignments)
 assignments = model.get_assignments()
 
-# Optionally, save results to a file
-assignments.to_csv('ula_assignments.csv')
-Model Structure
+# Model Structure
 Variables:
 x[i, s]: Binary variable indicating if ULA i is assigned to studio s.
 alpha[i, j]: Binary variable indicating if ULA i is assigned to instructor j.
