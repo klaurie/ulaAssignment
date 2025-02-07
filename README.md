@@ -3,7 +3,7 @@
 Overview
 
 This optimization program is designed to allocate Undergraduate Learning Assistants (ULAs) to studios for a given set of constraints and preferences, considering several factors such as ULA availability, instructor preferences, 
-studio requirements, and demographic considerations (e.g., major, race, gender). The program uses Gurobi optimization to determine the best assignments based on multiple objectives while ensuring fairness and adherence to constraints.
+studio requirements, and demographic considerations to emphasize fairness placement. The program uses Gurobi optimization to determine the best assignments based on multiple objectives while ensuring fairness and adherence to constraints.
 
 Features
 
@@ -41,59 +41,4 @@ Install required Python libraries:
 `pip install pandas numpy gurobipy`
 Ensure you have all necessary data (student, studio, and instructor information) in a compatible format (e.g., CSV or Excel files).
 
-Usage
-1. Define the Optimization Model
-To start the optimization process, initialize the model class and load your data (student info, studio info, etc.):
-
-`from gurobipy import Model`
-
-# Initialize the model
-`model = ULAPlacementModel(num_ulas, num_studios, student_info, studio_info, instructor_info)`
-
-# Define variables and constraints
-`model.define_hiring_variables()
-model.add_constraints()`
-2. Solve the Optimization Problem
-Once the model is set up, you can solve it using the following command:
-
-`model.m.optimize()`
-This will trigger the solver to find the optimal assignment of ULAs to studios while respecting the constraints.
-
-3. Save and Load Model State
-Save the current model to a file for later re-use:
-
-`model.m.write('model_solution.sol')`
-Load a previously saved model to rerun with hired and not hired ULAs:
-
-`model.m.read('model.lp')`
-
-4. Handle Rejections and Rerun
-If some ULAs have been rejected (or if the assignment needs to be updated), you can modify the model and rerun the optimization to fill remaining spots:
-
-# Retrieve variable values (e.g., ULA assignments)
-`assignments = model.get_assignments()`
-
-# Model Structure
-Variables:
-x[i, s]: Binary variable indicating if ULA i is assigned to studio s.
-
-alpha[i, j]: Binary variable indicating if ULA i is assigned to instructor j.
-
-w[j, g]: Continuous variable for instructor gender assignments.
-
-y[j, r]: Continuous variable for instructor race assignments.
-
-z[j, m]: Continuous variable for instructor major assignments.
-
-Constraints:
-
-Studio Constraints: Ensure each studio has the required number of ULAs.
-
-Instructor Constraints: Ensure each ULA is assigned to at most one instructor, with appropriate gender, race, and major representation.
-
-E-campus Constraints: Ensure e-campus and non-e-campus students are assigned to the correct studio types.
-
-Availability Constraints: Ensure ULA availability aligns with studio assignments.
-
-Demographic Constraints: Ensure fairness by enforcing constraints based on ULA race, major, and gender.
 
