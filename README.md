@@ -13,7 +13,7 @@ Instructor Preferences: Ensure ULAs are assigned to instructors they prefer, bas
 
 Student Availability: Ensure ULAs are assigned to studios where they are available.
 
-Demographic Constraints: Enforce fairness in the assignment process by considering ULA demographics (e.g., gender, race, major, school, and honors college).
+Demographic Constraints: Increase fairness in the assignment process by considering ULA demographics (e.g., gender, school, and honors college, etc).
 
 E-campus Preferences: Manage the assignment of e-campus and on-campus students to corresponding studio types.
 
