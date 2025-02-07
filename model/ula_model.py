@@ -5,12 +5,13 @@ from . import utils
 import time
 import sys
 import json
+import pickle
 
 import gurobipy as gp
 from gurobipy import GRB
 
 class ULAModel:
-    def __init__(self, input_file_name: str, output_ULA_file_name: str, output_studio_file_name: str, model_name: str, rerun : bool):
+    def __init__(self, input_file_name: str, output_ULA_file_name: str, output_studio_file_name: str, model_name: str):
             self.output_ULA_file_name = output_ULA_file_name
             self.output_studio_file_name = output_studio_file_name
 
@@ -67,13 +68,8 @@ class ULAModel:
             dl.create_instruct_pref_list(self)
 
             self.pref = dl.create_instruct_pref_binary(self)
-
-            if rerun:
-                # reload previous model
-                self.m = gp.read(model_name)
-            else:
-                # Define Model
-                self.m = gp.Model(model_name)
+            print(self.instructor_preferences)
+            self.m = gp.Model(model_name)
 
             self.end_preprocess = time.time()
 
@@ -416,15 +412,23 @@ class ULAModel:
         self.m.addConstrs((self.P_school[a, b] >= self.N_school[b] - self.N_school[a] for a in range(self.num_schools)
                       for b in range(self.num_schools)), "p_school_constraints2")
         
-    def rerun_constraints(self, hired_pairs, unavailable_ULAs):
-        for i, s in hired_pairs:  # Define pairs of already hired ULAs and studios
-            self.m.addConstr(self.x[i, s] == 1, f"FixedULA_{i}_{s}")        
+    def set_rerun_constraints(self, rerun_filename : str):
+        rerun_info = pd.read_csv(rerun_filename) 
 
-        # ensure unavailable ULAs cannot be hired
-        for i in unavailable_ULAs:
-            for s in range(self.num_studios):
-                self.m.addConstr(self.x[i, s] == 0, f"UnavailableULA_{i}_{s}")
+        # rerun file needs 3 columns: index, studio 1, studio 2, not available 
+        # Add constraints: If a student is not available, skip assignment to their studios
+        for student, row in rerun_info.iterrows():
+            studio1 = row['Studio 1']
+            studio2 = row['Studio 2']
+            not_available = row['not available']
 
+            if not_available == 0:  # Only enforce assignment if 'not available' is 0
+                self.m.addConstr(self.x[student, studio1] == 1, f"Assign_Studio1_{student}")
+                self.m.addConstr(self.x[student, studio2] == 1, f"Assign_Studio2_{student}")
+            else:   # this student is not available; make sure they arent hired
+                # Prevent the student from being assigned to any studio
+                for studio in range(self.num_studios):
+                    self.m.addConstr(self.x[student, studio] == 0, f"Prevent_All_Studios_{student}")
 
     def infeasible_model(self):
         # create output file with flags to help format input
@@ -542,9 +546,7 @@ class ULAModel:
         h_sol = self.m.getAttr("X", temp)  # Retrieve variables with the names above
 
         df_ula = self.student_info.copy()
-        df_studios = self.studio_info.copy()
-
-        ula_index = {self.student_info.loc[i, 'Email']: i for i in range(self.num_ulas)}
+        df_studios = self.studio_info.copy()     
 
         # if this is a rerun these columns will already exist, don't overwrite them
         df_ula['Hire?'] = 0
@@ -562,38 +564,92 @@ class ULAModel:
         df_studios['Non-Honors'] = 0
         df_studios['ReturnULA'] = 0
 
-        for i in range(self.num_ulas):
-            # If a student was hired in a previous run, they are marked as unavailable. We didn't hire them this round
-            # But we also can't change their previous data
-            if self.student_info.loc[i, "Not Available"] == 0:
-                if h_sol[i] > 0.1:
-                    df_ula.loc[i, 'Hire?'] = h_sol[i]
-
-                    # Mark not available flag for rerun opt prog purposes
-                    df_ula.loc[i, 'Not Available'] = h_sol[i]
-
-                    # temp = x_sol[(i*100):(i*100+num_studios)]
-                    temp = x_sol[(i * self.num_studios):(i * self.num_studios + self.num_studios)]
-                    temp1 = [x for x in range(len(temp)) if temp[x] > 0.1]
-                    df_ula.loc[i, 'Studio 1'] = temp1[0] + 1
-                    df_ula.loc[i, 'Studio 2'] = temp1[1] + 1
-
-                    # Mark positions as filled
-                    df_studios.loc[temp1[0] + 1, 'Position Filled'] = 1
-                    df_studios.loc[temp1[1] + 1, 'Position Filled'] = 1
-                else:
-                    df_ula.loc[i, 'Hire?'] = -1
-                    df_ula.loc[i, 'Studio 1'] = -1
-                    df_ula.loc[i, 'Studio 2'] = -1
-
-                    # mark if ULA was returning ULA and wasn't hired
-                    if df_ula.loc[i, 'Return ULA'] == 1:
-                        df_ula.loc[i, 'Return_Req'] = 1
+        self.write_ula_solutions(x_sol, h_sol, df_ula, df_studios)
 
 
         df_studios['ULA 1'] = -1
         df_studios['ULA 2'] = -1
 
+        self.write_studio_solutions(df_ula, df_studios)
+
+        # flag if instructor preference was not met
+        self.write_instructor_solutions(df_ula, df_studios)
+
+        # rerun stuff
+        hired_students = self.write_rerun_df(df_ula)
+        print(hired_students)
+
+        hired_students.to_csv('rerun_output.csv')
+        df_ula.to_csv(self.output_ULA_file_name)
+        df_studios.to_csv(self.output_studio_file_name)
+
+    def write_rerun_df(self, df_ula):
+        # Initialize DataFrame with hired students
+        hired_students = pd.DataFrame()
+        
+        # Get mask for hired students
+        hired_mask = df_ula['Hire?'] == 1
+        
+        # Initialize all columns with numeric default values
+        hired_students['Studio 1'] = -1
+        hired_students['Studio 2'] = -1
+        hired_students['Languages'] = -1
+        hired_students['Gender'] = -1
+        hired_students['Race'] = -1
+        hired_students['School'] = -1
+        hired_students['Major'] = -1
+        
+        # Assign numeric values for hired students
+        hired_students['Studio 1'] = df_ula[hired_mask]['Studio 1']
+        hired_students['Studio 2'] = df_ula[hired_mask]['Studio 2']
+        hired_students['Languages'] = df_ula[hired_mask]['Languages']  # Keep as string for comma-separated values
+        hired_students['Gender'] = df_ula[hired_mask]['Gender'].astype(int)
+        hired_students['Race'] = df_ula[hired_mask]['Race'].astype(int)
+        hired_students['School'] = df_ula[hired_mask]['School'].astype(int)
+        hired_students['Major'] = df_ula[hired_mask]['Major'].astype(int)
+        
+        return hired_students
+
+    def write_instructor_solutions(self, df_ula, df_studios):
+        for i in range(self.num_instructors):
+            instructor_email = self.unique_instructors[i]
+            remaining_students = self.instructor_preferences[instructor_email].copy()  # Create a copy of preferences
+            
+            # Loop through each studio associated with this instructor
+            for studio_idx in self.instructor_sections.get(i, []):
+                # Get ULAs assigned to this studio
+                ula_1 = df_studios.loc[studio_idx, 'ULA 1']
+                ula_2 = df_studios.loc[studio_idx, 'ULA 2']
+
+                # Create a dictionary to map indices back to student emails
+                email_to_index = {email: idx for idx, email in enumerate(self.student_info['Email'])}
+                index_to_email = {idx: email for email, idx in email_to_index.items()}
+
+                # Remove assigned ULAs from remaining students if they were in preferences
+                if ula_1 != -1 and ula_1 in remaining_students:
+                    remaining_students.remove(ula_1)
+                if ula_2 != -1 and ula_2 in remaining_students:
+                    remaining_students.remove(ula_2)
+
+            # After checking all studios, if there are still remaining preferred students
+            if remaining_students:
+                # Map remaining students' indices back to emails
+                remaining_students_emails = [index_to_email[student] for student in remaining_students]
+                
+                # Set IP_Req flag for all studios of this instructor
+                for studio_idx in self.instructor_sections.get(i, []):
+                    df_studios.loc[studio_idx, 'IP_Req'] = ', '.join(remaining_students_emails)
+                    
+                    # Set IP_Req flag for assigned ULAs
+                    ula_1 = df_studios.loc[studio_idx, 'ULA 1']
+                    ula_2 = df_studios.loc[studio_idx, 'ULA 2']
+                    
+                    if ula_1 != -1:
+                        df_ula.loc[ula_1, 'IP_Req'] = 1
+                    if ula_2 != -1:
+                        df_ula.loc[ula_2, 'IP_Req'] = 1
+
+    def write_studio_solutions(self, df_ula, df_studios):
         for s in range(self.num_studios):
             # Get x variables for studio "s"
             temp = [self.m.getVarByName(name) for name in (f"x[{i},{j}]" for i in range(self.num_ulas) for j in range(s, s + 1))]
@@ -609,9 +665,6 @@ class ULAModel:
             else:
                 df_studios.loc[s, 'ULA 1'] = temp2[0]
                 df_studios.loc[s, 'ULA 2'] = temp2[1]
-
-                if df_ula.loc[temp2[0], 'Return ULA'] == 1 or df_ula.loc[temp2[1], 'Return ULA'] == 1:
-                    df_studios.loc[s, 'ReturnULA'] = 1
 
             # check if ULA language meets req if there are any
             if df_studios.loc[s, 'Language'] != -1:
@@ -634,8 +687,12 @@ class ULAModel:
                         df_studios.loc[s, 'Lang_Req'] = 1
 
                 # Flag if ULA course preference is not met
-                if df_studios.loc[s, 'Course Index'] != df_ula.loc[df_studios.loc[s, 'ULA 1'], 'Course Preference']:
-                    df_ula.loc[df_studios.loc[s, 'ULA 1'], 'SP_Req'] = 1
+                ula_index = df_studios.loc[s, 'ULA 1']
+                assigned_course = df_studios.loc[s, 'Course Index']
+                preferred_course = df_ula.loc[ula_index, 'Course Preference']
+                is_course_mismatch = assigned_course != preferred_course
+                if is_course_mismatch:
+                    df_ula.loc[ula_index, 'SP_Req'] = 1
 
                 if df_studios.loc[s, 'ULA 2'] != -1:
                     if df_studios.loc[s, 'Course Index'] != df_ula.loc[df_studios.loc[s, 'ULA 2'], 'Course Preference']:
@@ -668,41 +725,28 @@ class ULAModel:
                             df_ula.loc[ula2, 'Non-Honors'] = 1
                             df_studios.loc[s, 'Non-Honors'] = 1
 
-        # flag if instructor preference was not met
-        # pre-condition: preferences should not include emails of ULAs not listed
-        for i in range(self.num_instructors):
-            for s in self.instructor_preferences[self.unique_instructors[i]]:
-                ula_1 = df_ula.loc[s, 'Studio 1']
-                ula_2 = df_ula.loc[s, 'Studio 2']
+    def write_ula_solutions(self, x_sol, h_sol, df_ula, df_studios):
+        for i in range(self.num_ulas):
+            if h_sol[i] > 0.1:
+                df_ula.loc[i, 'Hire?'] = h_sol[i]
 
-                # Create a dictionary to map indices back to student emails
-                email_to_index = {email: idx for idx, email in enumerate(self.student_info['Email'])}
-                index_to_email = {idx: email for email, idx in email_to_index.items()}
+                # temp = x_sol[(i*100):(i*100+num_studios)]
+                temp = x_sol[(i * self.num_studios):(i * self.num_studios + self.num_studios)]
+                temp1 = [x for x in range(len(temp)) if temp[x] > 0.1]
+                df_ula.loc[i, 'Studio 1'] = temp1[0] + 1
+                df_ula.loc[i, 'Studio 2'] = temp1[1] + 1
 
-                if len(self.instructor_sections.get(i, [])) > 0:
-                    # Create a copy of the instructor's preference list
-                    remaining_students = self.instructor_sections[i][:]
+                # Mark positions as filled
+                df_studios.loc[temp1[0] + 1, 'Position Filled'] = 1
+                df_studios.loc[temp1[1] + 1, 'Position Filled'] = 1
+            else:
+                df_ula.loc[i, 'Hire?'] = -1
+                df_ula.loc[i, 'Studio 1'] = -1
+                df_ula.loc[i, 'Studio 2'] = -1
 
-                    # Remove ula_1 and ula_2 from the preferences
-                    if ula_1 in remaining_students:
-                        remaining_students.remove(ula_1)
-                    if ula_2 in remaining_students:
-                        remaining_students.remove(ula_2)
-
-                    # If any students are left in the preference list, set IP_Req flag
-                    if len(remaining_students) > 0:
-                        df_ula.loc[s, 'IP_Req'] = 1
-                        
-                        # Map remaining students' indices back to emails
-                        remaining_students_emails = [index_to_email[student] for student in remaining_students]
-
-                        # Set instructor studio sections to the current list of unassigned students
-                        for j in self.instructor_sections.get(i, []):
-                            df_studios.loc[j, 'IP_Req'] = ', '.join(remaining_students_emails)
-
-        # outputFileLocation+
-        df_ula.to_csv(self.output_ULA_file_name)
-        df_studios.to_csv(self.output_studio_file_name)
+                # mark if ULA was returning ULA and wasn't hired
+                if df_ula.loc[i, 'Return ULA'] == 1:
+                    df_ula.loc[i, 'Return_Req'] = 1
 
 
     def build_model(self):
