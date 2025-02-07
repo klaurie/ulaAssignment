@@ -18,27 +18,3 @@ Demographic Constraints: Increase fairness in the assignment process by consider
 E-campus Preferences: Manage the assignment of e-campus and on-campus students to corresponding studio types.
 
 Variable Adjustment: The model allows for variable redefinition to accommodate re-runs, such as adjusting for rejections and reassignments.
-
-Requirements
-
-Python 3.x
-
-Gurobi Optimizer (for solving the optimization problem)
-
-pandas (for data manipulation)
-
-numpy (for mathematical operations)
-
-Setup
-
-Install Gurobi (if you don't have it already):
-
-Download and install from Gurobi's website.
-You’ll need a Gurobi license (a free academic license is available).
-Install required Python libraries:
-
-
-`pip install pandas numpy gurobipy`
-Ensure you have all necessary data (student, studio, and instructor information) in a compatible format (e.g., CSV or Excel files).
-
-
