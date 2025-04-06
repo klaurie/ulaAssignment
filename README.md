@@ -3,7 +3,7 @@
 Overview
 
 This optimization program is designed to allocate Undergraduate Learning Assistants (ULAs) to studios for a given set of constraints and preferences, considering several factors such as ULA availability, instructor preferences, 
-studio requirements, and demographic considerations to emphasize fairness placement. The program uses Gurobi optimization to determine the best assignments based on multiple objectives while ensuring fairness and adherence to constraints.
+studio requirements. The program uses Gurobi optimization to determine the best assignments based on multiple objectives while ensuring fairness and adherence to constraints.
 
 Features
 
@@ -13,7 +13,7 @@ Instructor Preferences: Ensure ULAs are assigned to instructors they prefer, bas
 
 Student Availability: Ensure ULAs are assigned to studios where they are available.
 
-Demographic Constraints: Increase fairness in the assignment process by considering ULA demographics (e.g., gender, school, and honors college, etc).
+Demographic Constraints: Place the hired ULAs in studio sections that provide distributed representation across schools/majors.
 
 E-campus Preferences: Manage the assignment of e-campus and on-campus students to corresponding studio types.
 
